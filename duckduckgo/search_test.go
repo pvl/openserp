@@ -2,9 +2,11 @@ package duckduckgo
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/karust/openserp/core"
 	"github.com/karust/openserp/testutil"
@@ -307,5 +309,45 @@ func TestFindMoreResultsButton(t *testing.T) {
 		if hit := findMoreResultsButton(page) != nil; hit != tc.wantHit {
 			t.Fatalf("hit=%v want=%v", hit, tc.wantHit)
 		}
+	}
+}
+
+func TestNoResultsNoticeStopsWaiting(t *testing.T) {
+	testutil.RequireIntegration(t)
+
+	fixture, err := os.ReadFile("testdata/search_results.html")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+
+	browser := ithelper.CreateBrowser(t)
+	page, err := browser.Navigate(context.Background(), "about:blank")
+	if err != nil {
+		t.Fatalf("navigate: %v", err)
+	}
+	defer core.DeferClosePage(context.Background(), page, browser)()
+	ddg := New(*browser, ithelper.EngineOptions())
+
+	if err := page.SetDocumentContent(emptySERPHTML); err != nil {
+		t.Fatalf("set content: %v", err)
+	}
+	if !ddg.isNoResults(page) {
+		t.Fatal("empty SERP notice not detected")
+	}
+	start := time.Now()
+	_, _, err = core.WaitForElementsUntil(context.Background(), page, Selectors.Results, 10*time.Second,
+		func() bool { return ddg.isNoResults(page) })
+	if !errors.Is(err, core.ErrEmptyResult) {
+		t.Fatalf("err = %v, want ErrEmptyResult", err)
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("waited %s for an empty SERP", elapsed)
+	}
+
+	if err := page.SetDocumentContent(string(fixture)); err != nil {
+		t.Fatalf("set content: %v", err)
+	}
+	if ddg.isNoResults(page) {
+		t.Fatal("results page classified as empty")
 	}
 }

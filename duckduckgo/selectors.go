@@ -7,6 +7,7 @@ package duckduckgo
 // keep older fallbacks last to absorb DOM rewrites without losing coverage.
 var Selectors = struct {
 	NoResults        []string
+	NoResultsMarkers []string
 	CaptchaSelectors []string
 	CaptchaMarkers   []string
 	Results          []string
@@ -24,6 +25,14 @@ var Selectors = struct {
 		"div[class*='no-results']",
 		"[data-testid='no-results']",
 		"div[data-result='no-results']",
+	},
+	// NoResultsMarkers are lowercase substrings of the empty-SERP notice. The
+	// React SERP renders it as "<p class=obfuscated><span>No results found for
+	// <b>query</b></span></p>" with no stable class or test id, so the text is the
+	// only signal. English only: DDG localizes it, other locales fall back to
+	// the selector timeout.
+	NoResultsMarkers: []string{
+		"no results found for",
 	},
 	// CaptchaSelectors detect DDG's anomaly/challenge interstitials via DOM.
 	CaptchaSelectors: []string{

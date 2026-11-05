@@ -181,3 +181,23 @@ func TestIsDDGAdURL(t *testing.T) {
 		}
 	}
 }
+
+// emptySERPHTML mirrors DDG's current React empty SERP (2026-11): the notice has
+// only obfuscated classes, so detection relies on its text.
+const emptySERPHTML = `<html><body><section data-testid="mainline" data-area="mainline">
+<ol class="react-results--main"><li><div data-testid="site-filter">Only showing results from apps.shopify.com</div></li>
+<li data-layout="related_searches">Searches related to site:apps.shopify.com "Kentro"</li></ol>
+<div class="gSXOPxXJQAIpv4HDaDFd"><p class="THG_yNtlhifBrJDatoUn"><span>No results found for <b>site:apps.shopify.com "Kentro"</b></span></p>
+<p>Suggestions:</p><ul><li>Check spelling</li></ul></div></section></body></html>`
+
+func TestParseDDGHTMLNoResultsNotice(t *testing.T) {
+	t.Parallel()
+
+	results, err := ParseHTML(bytes.NewReader([]byte(emptySERPHTML)))
+	if err != nil {
+		t.Fatalf("ParseHTML() error = %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("expected zero results, got %d", len(results))
+	}
+}

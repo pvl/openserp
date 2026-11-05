@@ -2,7 +2,9 @@ package duckduckgo
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -62,8 +64,18 @@ func (ddg *DuckDuckGo) isCaptcha(page *rod.Page) bool {
 	return false
 }
 
+// isNoResults reports DDG's empty-SERP notice. It runs on every poll while
+// waiting for results, so it checks the DOM directly (no full-HTML snapshot).
 func (ddg *DuckDuckGo) isNoResults(page *rod.Page) bool {
-	return core.HasAnySelector(page, Selectors.NoResults)
+	if core.HasAnySelector(page, Selectors.NoResults) {
+		return true
+	}
+	for _, marker := range Selectors.NoResultsMarkers {
+		if has, _, err := page.HasR("p, div, span", "/"+regexp.QuoteMeta(marker)+"/i"); err == nil && has {
+			return true
+		}
+	}
+	return false
 }
 
 func (ddg *DuckDuckGo) parseResults(results rod.Elements, pageNum int) []core.SearchResult {
@@ -197,9 +209,10 @@ func (ddg *DuckDuckGo) Search(ctx context.Context, query core.Query) (results []
 	}
 	defer core.DeferClosePage(ctx, page, &ddg.Browser)()
 
-	elements, selector, err := core.WaitForElements(ctx, page, Selectors.Results, ddg.GetSelectorTimeout())
+	elements, selector, err := core.WaitForElementsUntil(ctx, page, Selectors.Results, ddg.GetSelectorTimeout(),
+		func() bool { return ddg.isNoResults(page) })
 	if err != nil {
-		if ddg.isNoResults(page) {
+		if errors.Is(err, core.ErrEmptyResult) || ddg.isNoResults(page) {
 			ddg.logger.Warn("No results found")
 			return []core.SearchResult{}, nil
 		}

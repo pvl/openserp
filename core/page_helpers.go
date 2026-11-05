@@ -26,6 +26,15 @@ const pollInterval = 120 * time.Millisecond
 // so callers can disambiguate between "no results" / "captcha" by inspecting
 // the page directly.
 func WaitForElements(ctx context.Context, page *rod.Page, selectors []string, timeout time.Duration) (rod.Elements, string, error) {
+	return WaitForElementsUntil(ctx, page, selectors, timeout, nil)
+}
+
+// WaitForElementsUntil is WaitForElements with an early exit: after each probe
+// that finds no results it calls isEmpty, and returns ErrEmptyResult as soon as
+// that reports the engine's "no results" page. Without it a SERP with zero hits
+// waits the full selector timeout and is reported as ErrSearchTimeout, which
+// callers cannot tell apart from a broken page. A nil isEmpty never stops early.
+func WaitForElementsUntil(ctx context.Context, page *rod.Page, selectors []string, timeout time.Duration, isEmpty func() bool) (rod.Elements, string, error) {
 	if page == nil {
 		return nil, "", ErrSearchTimeout
 	}
@@ -45,8 +54,13 @@ func WaitForElements(ctx context.Context, page *rod.Page, selectors []string, ti
 		return nil, ""
 	}
 
+	empty := func() bool { return isEmpty != nil && isEmpty() }
+
 	if elements, selector := probe(); len(elements) > 0 {
 		return elements, selector, nil
+	}
+	if empty() {
+		return nil, "", ErrEmptyResult
 	}
 
 	deadline := time.Now().Add(timeout)
@@ -56,6 +70,9 @@ func WaitForElements(ctx context.Context, page *rod.Page, selectors []string, ti
 		}
 		if elements, selector := probe(); len(elements) > 0 {
 			return elements, selector, nil
+		}
+		if empty() {
+			return nil, "", ErrEmptyResult
 		}
 		if err := SleepContext(ctx, pollInterval); err != nil {
 			return nil, "", err

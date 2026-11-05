@@ -31,6 +31,7 @@ func classifyDDGDocument(doc *goquery.Document) error {
 		CaptchaSelectors: Selectors.CaptchaSelectors,
 		CaptchaMarkers:   Selectors.CaptchaMarkers,
 		EmptySelectors:   Selectors.NoResults,
+		EmptyMarkers:     Selectors.NoResultsMarkers,
 	})
 }
 
